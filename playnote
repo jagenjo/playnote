@@ -1,0 +1,168 @@
+#!/usr/local/bin/node
+const midi = require('midi');
+const readline = require('readline');
+
+console.log("playnote by Javi Agenjo");
+
+var args = process.argv.slice(2);
+//console.log(args);
+var port = -1;
+var interval = 400;
+var duration = 20;
+var scales = {
+	chromatic: [0,1,2,3,4,5,6,7,8,9,10,11],
+	pentatonic: [1,4,6,9,11],
+	major: [0,2,3,5,7,8,10],
+	major2: [0,2,3,5,7,8,10,12],
+	stranger: [0,3,7,8,12],
+}
+
+var scale = scales.stranger;
+var octave = -1;
+var mode = "up";
+var verbose = false;
+
+var port_arg = args.indexOf("-p");
+if(port_arg != -1)
+	port = Number( args[port_arg + 1] ) || 0;	
+
+var arg_index = args.indexOf("-t");
+if(arg_index != -1)
+	interval = Number( args[ arg_index + 1] ) || 400;	
+
+var arg_index = args.indexOf("-s");
+if(arg_index != -1)
+	scale = scales[ args[ arg_index + 1] ] || scales.major;
+
+var arg_index = args.indexOf("-m");
+if(arg_index != -1)
+	mode = String( args[ arg_index + 1] );
+
+var arg_index = args.indexOf("-o");
+if(arg_index != -1)
+	octave = Number( args[ arg_index + 1] );
+
+verbose = args.indexOf("-v") != -1;
+
+// Set up a new output.
+const output = new midi.Output();
+
+// Count the available output ports.
+if( args.length == 0 || port == -1 )
+{
+	console.log("You must specify port: playnote -p 3")
+	var num_ports = output.getPortCount();
+	console.log("num ports:",num_ports);
+
+	for(var i = 0; i < num_ports; ++i)
+	{
+		// Get the name of a specified output port.
+		var portname = output.getPortName(i);
+		console.log( i + ".- ",portname );
+	}
+	process.exit(1);
+}
+
+// Open the first available output port.
+output.openPort(port);
+
+if(0)
+{
+	console.error("cannot open port");
+	process.exit(1);
+}
+
+var NOTEON = 0x90;
+var NOTEOFF = 0x80;
+var A4 = 69; //freq 440
+
+function playNote( num, duration, velocity )
+{
+	num = Math.floor(num);
+	// Send a MIDI message.
+	output.sendMessage([NOTEON,num,velocity || 127]);
+	if(duration)
+	setTimeout( function(){
+		//console.log("OFF",num);
+		output.sendMessage([NOTEOFF,num,0]);
+	},duration );
+}
+
+
+Array.prototype.rand = function() { return this[Math.floor(Math.random()*this.length)]; }
+Array.prototype.mod = function(v) { v = v % this.length; if(v<0) v = this.length + v; return this[v]; }
+Array.prototype.updown = function(v) { v = Math.abs(v) % (this.length * 2 - 2); if(v > this.length - 1) v = this.length - (v - this.length + 2); return this[v]; }
+
+
+var tick = 0;
+var pos = 0;
+function doTick()
+{
+	var dur = Math.min( duration, interval ) - 5;
+	var note = A4 + octave * 12;
+	if(mode == "rand")
+		note += scale.rand(tick);
+	else if (mode == "up")
+		note += scale.mod(tick);
+	else if (mode == "down")
+		note += scale.mod(-tick-1);
+	else if (mode == "updown")
+		note += scale.updown(tick);
+	else if (mode == "walk")
+	{
+		note += scale.updown( pos );
+		pos += Math.random() > 0.5 ? 1 : -1; 	
+	}
+	playNote( note, dur );
+	if(verbose)
+		console.log(note,dur);
+	tick++;
+	setTimeout( doTick, interval );
+}
+
+doTick();
+//setInterval( doTick, interval );
+
+function finish() {
+  console.log("closing ports...");
+  for(var i = 0; i < 127; ++i)
+     output.sendMessage([NOTEOFF,i,127]);
+  output.closePort();
+  process.exit(0);
+}
+
+process.on('SIGINT', finish);
+
+console.log("type exit or Control+C to finish");
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+
+function processLine(input)
+{
+	//console.log("::",input);
+	var t = input.split(" ");
+	if(input == "exit")
+		return finish();
+	if(t[0] == "mode")
+		mode = t[1];
+	if(t[0] == "octave")
+		octave = Number(t[1]);
+	if(t[0] == "scale")
+		scale = scales[ t[1] ] || scale.major;
+	if(input[0] == "-")
+		interval -= 50;
+	if(input[0] == "+")
+		interval += 50;
+process.stdout.write("> ");	
+}
+
+process.stdout.write("> ");	
+rl.on( "line", processLine );
+
+
+// Close the port when done.
+//output.closePort();
