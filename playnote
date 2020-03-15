@@ -7,7 +7,7 @@ console.log("playnote by Javi Agenjo");
 var args = process.argv.slice(2);
 //console.log(args);
 var port = -1;
-var interval = 400;
+var interval = 250;
 var duration = 20;
 var scales = {
 	chromatic: [0,1,2,3,4,5,6,7,8,9,10,11],
@@ -19,7 +19,7 @@ var scales = {
 
 var scale = scales.stranger;
 var octave = -1;
-var mode = "up";
+var mode = "updown";
 var verbose = false;
 
 var port_arg = args.indexOf("-p");
@@ -41,6 +41,12 @@ if(arg_index != -1)
 var arg_index = args.indexOf("-o");
 if(arg_index != -1)
 	octave = Number( args[ arg_index + 1] );
+
+var arg_index = args.indexOf("-n");
+if(arg_index != -1)
+	scale = args[ arg_index + 1].split(",").map(Number);
+
+
 
 verbose = args.indexOf("-v") != -1;
 
@@ -113,9 +119,17 @@ function doTick()
 		note += scale.updown( pos );
 		pos += Math.random() > 0.5 ? 1 : -1; 	
 	}
-	playNote( note, dur );
-	if(verbose)
-		console.log(note,dur);
+	else if (mode == "jump")
+	{
+		note += scale.updown( pos );
+		pos += Math.round(Math.random()*5)-2;
+	}
+	if(!isNaN(note))
+	{
+		playNote( note, dur );
+		if(verbose)
+			console.log(note,dur);
+	}
 	tick++;
 	setTimeout( doTick, interval );
 }
@@ -145,19 +159,48 @@ function processLine(input)
 {
 	//console.log("::",input);
 	var t = input.split(" ");
-	if(input == "exit")
-		return finish();
-	if(t[0] == "mode")
-		mode = t[1];
-	if(t[0] == "octave")
-		octave = Number(t[1]);
-	if(t[0] == "scale")
-		scale = scales[ t[1] ] || scale.major;
-	if(input[0] == "-")
-		interval -= 50;
-	if(input[0] == "+")
-		interval += 50;
-process.stdout.write("> ");	
+	switch(t[0])
+	{
+		case "help":
+			console.log("",	"(e)xit: exit the app.\n",
+					"(m)ode {v}: change mode between up,down,rand,walk,jump\n",
+					"(o)ctave {n}: select octave\n",
+					"(s)cale {v}: to select a given scale from major,chromatic,pentatonic,stranger.\n",
+					"- : reduce time.\n",
+					"+: increase time.\n",
+					"(n)otes {1,2,3}: select sequence, notes are 69+num. use _ to add silences.\n");
+			break;
+		case "exit":
+		case "e":
+			return finish();
+			break;
+		case "mode":
+		case "m":
+			mode = t[1];
+			break;
+		case "octave":
+		case "o":
+			octave = Number(t[1]);
+			break;
+		case "scale":
+		case "s":
+			scale = scales[ t[1] ] || scale.major;
+			break;
+		case "-":
+			if(interval > 90)
+				interval -= 50;
+			break;
+		case "+":
+			interval += 50;
+			break;
+		case "notes":
+		case "n":
+			scale = t[1].split(",").map(Number)
+			break;
+		default:
+			console.log("unknown command");
+	}
+	process.stdout.write("> ");	
 }
 
 process.stdout.write("> ");	
